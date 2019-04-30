@@ -695,7 +695,7 @@ if __name__ == '__main__': # pragma: no cover
         _LOGGER.error("Test error %s",str(ex))
         traceback.print_exc()
     except:
-        _LOGGER.error("Test error"))
+        _LOGGER.error("Test error")
         traceback.print_exc()
     finally:
         loop.close()
