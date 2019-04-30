@@ -178,13 +178,19 @@ class R9:
         payload = retdata[20:-8]
         try:
             jsonstr = payload.decode('utf-8')
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.warning("CheckResp decode %s %s",ex,binascii.hexlify(payload))
+            return CD_CONTINUE_WAITING
+        except:
+            _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
             return CD_CONTINUE_WAITING
         try:
             jsondec = json.loads(jsonstr)
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.warning("CheckResp jsonp %s %s",ex,jsonstr)
+            return CD_CONTINUE_WAITING
+        except:
+            _LOGGER.warning("CheckResp jsonp %s",jsonstr)
             return CD_CONTINUE_WAITING
         if "gwId" in jsondec:
             return CD_ADD_AND_CONTINUE_WAITING,jsondec
@@ -216,8 +222,10 @@ class R9:
                         if out_data:
                             break
                     break
-            except object as ex:
+            except BaseException as ex:
                 _LOGGER.error("Protocol[%s:%d] error: %s",*addr,str(ex))
+            except:
+                _LOGGER.error("Protocol[%s:%d] error",*addr)
             finally:
                 if _local:
                     try:
@@ -242,8 +250,10 @@ class R9:
                         obj = R9((it['ip'],DEFAULT_PORT) ,it['gwId'],b'0123456789abcdef')
                         rv[it['ip']] = obj
                         _LOGGER.info("Discovered %s",obj)
-                except object as ex:
+                except BaseException as ex:
                     _LOGGER.error("Error in discovery process %s", ex)
+                except:
+                    _LOGGER.error("Error in discovery process")
         return rv
     
     def __init__(self,hp,idv,key,timeout = 5):
@@ -298,8 +308,12 @@ class R9:
             if not self._writer:
                 self._reader,self._writer = await asyncio.open_connection(*self._hp)
             return True
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.error("Cannot estabilish connection %s",ex)
+            await self.destroy_connection()
+            return False
+        except:
+            _LOGGER.error("Cannot estabilish connection")
             await self.destroy_connection()
             return False
     
@@ -363,24 +377,36 @@ class R9:
             return False
         try:
             cryptpayload = b64decode(b64payload)
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.warning("CheckResp b64 %s %s",ex,binascii.hexlify(b64payload))
+            return False
+        except:
+            _LOGGER.warning("CheckResp b64 %s",binascii.hexlify(b64payload))
             return False
         try:
             payload = self._cipher.decrypt(cryptpayload)
             payload = R9._unpad(payload)
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.warning("CheckResp decry %s %s",ex,binascii.hexlify(cryptpayload))
+            return False
+        except:
+            _LOGGER.warning("CheckResp decry %s",binascii.hexlify(cryptpayload))
             return False
         try:
             jsonstr = payload.decode('utf-8')
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.warning("CheckResp decode %s %s",ex,binascii.hexlify(payload))
+            return False
+        except:
+            _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
             return False
         try:
             jsondec = json.loads(jsonstr)
-        except object as ex:
+        except BaseException as ex:
             _LOGGER.warning("CheckResp jsonp %s %s",ex,jsonstr)
+            return False
+        except:
+            _LOGGER.warning("CheckResp jsonp %s",jsonstr)
             return False
         if not len(command_in_dict):
             return jsondec
@@ -488,8 +514,11 @@ class R9:
                 return CD_ABORT_AND_RETRY,None
             try:
                 keydec = b64decode(dictok["dps"]["2"].encode())
-            except object as ex:
+            except BaseException as ex:
                 _LOGGER.warning("CheckResp invalidkey %s %s",dictok,ex)
+                return CD_ABORT_AND_RETRY,None
+            except:
+                _LOGGER.warning("CheckResp invalidkey %s",dictok)
                 return CD_ABORT_AND_RETRY,None
             return CD_RETURN_IMMEDIATELY,keydec
         else:
@@ -540,8 +569,10 @@ class R9:
                         break
             except asyncio.TimeoutError:
                 _LOGGER.warning("Protocol[%s:%d] connecting timeout",*self._hp)
-            except object as ex:
+            except BaseException as ex:
                 _LOGGER.warning("Protocol[%s:%d] error %s",*self._hp,ex)
+            except:
+                _LOGGER.warning("Protocol[%s:%d] error",*self._hp)
         await self.destroy_connection()
         return None
     
@@ -660,8 +691,11 @@ if __name__ == '__main__': # pragma: no cover
         #loop.run_until_complete(emit_test('00000000a801000000000000000098018e11951127029b0625029906270299062702380227023a0225023802270238022d023202270299062702990627029806270238022702380227023802270238022802370227023802270238022702980627023802240245021c02380227023802270238022702980627029c0623023802270298062702990627029b062502990627029906270220b7a1119d11270299062702990628029b06250238022702380227023802270238022702380227029906270299062702990627023802270238022a0234022702380227023802260238022702380226029a06260238022602380226023802260241021e02380227029b0624029906270238022702980627029b0625029906270299062702990629021db79f11a2112502990627029b0625029906270238022702380227023802270238022a02350227029906270299062702990628023702260238022702380227023802270238022702380226023b02240299062702380226023802270238022602380227023c0223029906270299062702380226029b062402990627029906270299062802980627020000'))
             loop.run_until_complete(emit_test(*sys.argv))
         #loop.run_until_complete(learn_test())
-    except object as ex:
+    except BaseException as ex:
         _LOGGER.error("Test error %s",str(ex))
+        traceback.print_exc()
+    except:
+        _LOGGER.error("Test error"))
         traceback.print_exc()
     finally:
         loop.close()
