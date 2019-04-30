@@ -3,6 +3,7 @@ Created on 28 apr 2019
 
 @author: Matteo
 '''
+import traceback
 import struct
 import asyncio
 from base64 import b64decode, b64encode
@@ -225,7 +226,7 @@ class R9:
             except BaseException as ex:
                 _LOGGER.error("Protocol[%s:%d] error: %s",*addr,str(ex))
             except:
-                _LOGGER.error("Protocol[%s:%d] error",*addr)
+                _LOGGER.error("Protocol[%s:%d] error %s",*addr,traceback.format_exc())
             finally:
                 if _local:
                     try:
@@ -253,7 +254,7 @@ class R9:
                 except BaseException as ex:
                     _LOGGER.error("Error in discovery process %s", ex)
                 except:
-                    _LOGGER.error("Error in discovery process")
+                    _LOGGER.error("Error in discovery process %s",traceback.format_exc())
         return rv
     
     def __init__(self,hp,idv,key,timeout = 5):
@@ -313,7 +314,7 @@ class R9:
             await self.destroy_connection()
             return False
         except:
-            _LOGGER.error("Cannot estabilish connection")
+            _LOGGER.error("Cannot estabilish connection %s",traceback.format_exc())
             await self.destroy_connection()
             return False
     
@@ -629,7 +630,6 @@ class R9:
 if __name__ == '__main__': # pragma: no cover
     import sys
     import logging
-    import traceback
     async def testFake(n):
         for i in range(n):
             _LOGGER.debug("Counter is %d",i)
