@@ -183,21 +183,14 @@ Created on 28 apr 2019
 
 Costructs R9 remote Object.
 
-@type hp: tuple 
 #### Parameters
-* `hp` A tuple with host and port of the R9 remote
+* `hp` [tuple] A tuple with host and port of the R9 remote
 
-@type idv: string 
-#### Parameters
-* `idv` id of the R9 object
+* `idv` [string] id of the R9 object
 
-@type key: string|bytes 
-#### Parameters
-* `key` key used to encrypt/decrypt messages from/to R9
+* `key` [string|bytes] key used to encrypt/decrypt messages from/to R9
 
-@type timeout: int 
-#### Parameters
-* `timeout` timeout to be used in TCP communication (optional)
+* `timeout` [int] timeout to be used in TCP communication (optional)
 
 #### `public def `[`__repr__`](#classpygocomma_1_1r9_1_1_r9_1a6a0e598e53be629a41b1296514cd5324)`(self)` 
 
@@ -211,64 +204,48 @@ Destroys the connection with the R9 device.
 
 Sends ir to the R9 device.
 
-@type keybytes: bytes 
 #### Parameters
-* `keybytes` key to be emitted by R9 device. The key should be a byte object that represents lirc/arduino format array of little-endian shorts. This is the same format obtained with the learning process
+* `keybytes` [bytes] key to be emitted by R9 device. The key should be a byte object that represents lirc/arduino format array of little-endian shorts. This is the same format obtained with the learning process
 
-@type timeout: int 
-#### Parameters
-* `timeout` timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+* `timeout` [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
 
-@type retry: int 
-#### Parameters
-* `retry` Number of retries to make if no device is found (optional)
+* `retry` [int] Number of retries to make if no device is found (optional)
 
-@type: bytes 
 #### Returns
-: On successful send, the array of bytes obtained by R9 device is returned. Otherwise return value is None
+[bytes|NoneType] On successful send, the array of bytes obtained by R9 device is returned. Otherwise return value is None
 
 #### `public def `[`enter_learning_mode`](#classpygocomma_1_1r9_1_1_r9_1afaadcc2775e723da22defa5f143e76b4)`(self,timeout,retry)` 
 
 Puts R9 in learning mode.
 
-@type timeout: int 
 #### Parameters
-* `timeout` timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+* `timeout` [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
 
-@type retry: int 
-#### Parameters
-* `retry` Number of retries to make if no device is found (optional)
+* `retry` [int] Number of retries to make if no device is found (optional)
 
-@type: dict 
 #### Returns
-: On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
+[dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
 
 #### `public def `[`exit_learning_mode`](#classpygocomma_1_1r9_1_1_r9_1a01677f9b8581c807965cc1a8b117cd0d)`(self,timeout,retry)` 
 
 Exits R9 learning mode.
 
-@type timeout: int 
 #### Parameters
-* `timeout` timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+* `timeout` [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
 
-@type retry: int 
-#### Parameters
-* `retry` Number of retries to make if no device is found (optional)
+* `retry` [int] Number of retries to make if no device is found (optional)
 
-@type: dict 
 #### Returns
-: On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
+[dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
 
 #### `public def `[`get_learned_key`](#classpygocomma_1_1r9_1_1_r9_1a9262375eb161f435d245f8a370a24110)`(self,timeout)` 
 
 Puts R9 in learning mode.
 
-@type timeout: int 
 #### Parameters
-* `timeout` timeout to be used in TCP communication (optional). Default value is 30 seconds. If awaited, this method will block until a key is not received or timeout seconds have been passed
+* `timeout` [int] timeout to be used in TCP communication (optional). Default value is 30 seconds. If awaited, this method will block until a key is not received or timeout seconds have been passed
 
-@type: bytes 
 #### Returns
-: On successful key reception, the byte object representing the learned key is returned. this can be used with send_ir function for future key sending. It returns None on error or on timeout (no key was pressed/detected)
+[bytes|NoneType] On successful key reception, the byte object representing the learned key is returned. this can be used with send_ir function for future key sending. It returns None on error or on timeout (no key was pressed/detected)
 
 Generated by [Moxygen](https://sourcey.com/moxygen)
