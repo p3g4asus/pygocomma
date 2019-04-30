@@ -272,6 +272,12 @@ class R9:
         self._writer = None
     
     def __repr__(self):
+        """!
+        Gets string representation of this R9 object
+        
+        @return [string] string representation of this R9 object
+          
+        """
         return '(%s:%d) id=%s key=%s' %(*self._hp,self._id,self._key)
     
     async def destroy_connection(self):
@@ -394,6 +400,16 @@ class R9:
             return CD_CONTINUE_WAITING,None
     
     async def ping(self,timeout = -1,retry = 1):
+        """!
+        Sends ping to R9 object to see if it is online
+        
+        @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+        
+        @param retry: [int] Number of retries to make if no device is found (optional)
+        
+        @return [boolean] True if R9 is alive; False otherwise.
+          
+        """
         pld = self._get_payload_bytes(R9.PING_COMMAND,{})
         return await self._tcp_protocol(pld, self._check_ping_resp, timeout, retry)
     
