@@ -190,8 +190,24 @@ class R9:
             return CD_ADD_AND_CONTINUE_WAITING,jsondec
         else:
             return CD_CONTINUE_WAITING
+        
     @staticmethod
     async def discovery(timeout,retry=3):
+        """!
+        Discovers Tuya devices listening to broadcast UDP messages sent to 6666 port
+    
+        
+        @type timeout: int 
+        @param timeout: time to be waited for broadcast messages
+        
+        @type retry: int 
+        @param retry: Number of retries to make if no device is found (Obtional)
+        
+        @type: dict
+        @return: A dict whose keys are ip addresses of Tuya devices and values are R9 objects. Please note that th found R9 devices
+        cannot be used before setting the correct encryption key (it is set to b'0123456789abcdef' by default)
+          
+        """
         out_data = None
         _local = None
         addr = ('255.255.255.255',6666)
@@ -235,6 +251,22 @@ class R9:
         return rv
     
     def __init__(self,hp,idv,key,timeout = 5):
+        """!
+        Costructs R9 remote Object
+    
+        @type hp: tuple
+        @param hp: A tuple with host and port of the R9 remote
+    
+        @type idv: string
+        @param idv: id of the R9 object
+        
+        @type key: string|bytes
+        @param key: key used to encrypt/decrypt messages from/to R9
+        
+        @type timeout: int 
+        @param timeout: timeout to be used in TCP communication (optional)
+          
+        """
         self._hp = hp
         self._id = idv
         if isinstance(key, str):
@@ -251,6 +283,9 @@ class R9:
         return '(%s:%d) id=%s key=%s' %(*self._hp,self._id,self._key)
     
     async def destroy_connection(self):
+        """!
+        Destroys the connection with the R9 device    
+        """
         try:
             if self._writer:
                 self._writer.close()
@@ -271,6 +306,23 @@ class R9:
             return False
     
     def _generic_check_resp(self,retdata,command,command_in_dict = None):
+        """!
+        Checks payload of TCP packet got from R9 device. This includes Satus value check, CRC32 check, AES decryption (if needed), and MD5 check (if needed)
+    
+        @type retdata: bytes 
+        @param retdata: bytes of the TCP packet payload received prom R9 device
+        
+        @type command: int 
+        @param command: Command that is expected in the packet header
+        
+        @type command_in_dict: string|NoneType 
+        @param command_in_dict: Command that is expected in the packet JSON dps["1"]. If NoneType, no JSON is expected in packet content. If equal to '', 
+        no dps["1"] is expected in packet JSON
+        
+        @type: dict|boolean
+        @return: On successful check if no JSON content is present, True is returned, Otherwise the parsed dict is returned.
+        If check fails, False is returned
+        """
         lenorig = len(retdata)
         if lenorig<12+8+8:
             _LOGGER.warning("CheckResp small len=%d",lenorig)
@@ -379,14 +431,58 @@ class R9:
             return CD_CONTINUE_WAITING,None
     
     async def send_ir(self,keybytes,timeout = -1,retry=3):
+        """!
+        Sends ir to the R9 device
+    
+        
+        @type keybytes: bytes 
+        @param keybytes: key to be emitted by R9 device. The key should be a byte object that represents lirc/arduino format array of little-endian shorts.
+        This is the same format obtained with the learning process
+        
+        @type timeout: int 
+        @param timeout: timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+        
+        @type retry: int 
+        @param retry: Number of retries to make if no device is found (optional)
+        
+        @type: bytes
+        @return: On successful send, the array of bytes obtained by R9 device is returned. Otherwise return value is None
+          
+        """
         pld = self._get_payload_bytes(R9.STUDY_KEY_COMMAND,self._get_study_key_dict(keybytes))
         return await self._tcp_protocol(pld, self._check_study_key_resp, timeout,retry)
     
     async def enter_learning_mode(self,timeout = -1,retry=3):
+        """!
+        Puts R9 in learning mode
+    
+        @type timeout: int 
+        @param timeout: timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+        
+        @type retry: int 
+        @param retry: Number of retries to make if no device is found (optional)
+        
+        @type: dict
+        @return: On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
+          
+        """
         pld = self._get_payload_bytes(R9.STUDY_COMMAND,self._get_study_dict())
         return await self._tcp_protocol(pld, self._check_study_resp, timeout, retry)
     
     async def exit_learning_mode(self,timeout = -1,retry=3):
+        """!
+        Exits R9 learning mode
+    
+        @type timeout: int 
+        @param timeout: timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+        
+        @type retry: int 
+        @param retry: Number of retries to make if no device is found (optional)
+        
+        @type: dict
+        @return: On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
+          
+        """
         pld = self._get_payload_bytes(R9.STUDY_EXIT_COMMAND,self._get_study_exit_dict())
         return await self._tcp_protocol(pld, self._check_study_exit_resp, timeout,retry)
     
@@ -405,8 +501,19 @@ class R9:
             return CD_RETURN_IMMEDIATELY,keydec
         else:
             return CD_CONTINUE_WAITING,None
-    
+        
     async def get_learned_key(self,timeout=30):
+        """!
+        Puts R9 in learning mode
+    
+        @type timeout: int 
+        @param timeout: timeout to be used in TCP communication (optional). Default value is 30 seconds. If awaited, this method will block until a key is not received or
+        timeout seconds have been passed
+        
+        @type: bytes
+        @return: On successful key reception, the byte object representing the learned key is returned. this can be used with send_ir function for future key sending. It returns
+        None on error or on timeout (no key was pressed/detected) 
+        """
         return await self._tcp_protocol(None, self._check_learned_key, timeout,1)
         
     async def _tcp_protocol(self,data,check_data_fun,timeout = -1,retry=1):

@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pygocomma",
-    version="1.2",
+    version="1.3",
     author="p3g4asus",
     author_email="fulminedipegasus@gmail.com",
     description="Asyncio module for Gocomma R9 devices control",
@@ -24,6 +24,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        'PyCrypto',
+        'pycryptodome',
     ]
 )
