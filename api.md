@@ -168,10 +168,11 @@ Created on 28 apr 2019
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public def `[`__init__`](#classpygocomma_1_1r9_1_1_r9_1a3758ccdae1ff90798c46d7dd12a44b42)`(self,hp,idv,key,timeout)` | Costructs R9 remote Object.
+`public def `[`__init__`](#classpygocomma_1_1r9_1_1_r9_1afcf149690b694c65bfeb20b49193b75f)`(self,hp,idv,key,timeout,force_reconnect_s)` | Costructs R9 remote Object.
 `public def `[`__repr__`](#classpygocomma_1_1r9_1_1_r9_1a6a0e598e53be629a41b1296514cd5324)`(self)` | Gets string representation of this R9 object.
 `public def `[`destroy_connection`](#classpygocomma_1_1r9_1_1_r9_1a3cab2178523dfa8d3c66a2af01b90d8c)`(self)` | Destroys the connection with the R9 device.
-`public def `[`ping`](#classpygocomma_1_1r9_1_1_r9_1a6f79232c2460bc70427e646cbb92ea38)`(self,timeout,retry)` | Sends ping to R9 object to see if it is online.
+`public def `[`ask_last`](#classpygocomma_1_1r9_1_1_r9_1a7d21a233927822a2f85addc4b8c64a97)`(self,timeout,retry)` | Sends ping to R9 object to get last command.
+`public def `[`ping`](#classpygocomma_1_1r9_1_1_r9_1ae9be1fbd653c8e9ebcfb9ae57bb38c76)`(self,timeout,retry)` | Sends ping to R9 object to see if it is online.
 `public def `[`send_ir`](#classpygocomma_1_1r9_1_1_r9_1a9b40254ebc3e0174a76ac0c64105ae3d)`(self,keybytes,timeout,retry)` | Sends ir to the R9 device.
 `public def `[`enter_learning_mode`](#classpygocomma_1_1r9_1_1_r9_1afaadcc2775e723da22defa5f143e76b4)`(self,timeout,retry)` | Puts R9 in learning mode.
 `public def `[`exit_learning_mode`](#classpygocomma_1_1r9_1_1_r9_1a01677f9b8581c807965cc1a8b117cd0d)`(self,timeout,retry)` | Exits R9 learning mode.
@@ -179,7 +180,7 @@ Created on 28 apr 2019
 
 ## Members
 
-#### `public def `[`__init__`](#classpygocomma_1_1r9_1_1_r9_1a3758ccdae1ff90798c46d7dd12a44b42)`(self,hp,idv,key,timeout)` 
+#### `public def `[`__init__`](#classpygocomma_1_1r9_1_1_r9_1afcf149690b694c65bfeb20b49193b75f)`(self,hp,idv,key,timeout,force_reconnect_s)` 
 
 Costructs R9 remote Object.
 
@@ -192,6 +193,8 @@ Costructs R9 remote Object.
 
 * `timeout` [int] timeout to be used in TCP communication (optional)
 
+* `force_reconnect_s` [int] seconds after which to force reconnection
+
 #### `public def `[`__repr__`](#classpygocomma_1_1r9_1_1_r9_1a6a0e598e53be629a41b1296514cd5324)`(self)` 
 
 Gets string representation of this R9 object.
@@ -203,7 +206,21 @@ Gets string representation of this R9 object.
 
 Destroys the connection with the R9 device.
 
-#### `public def `[`ping`](#classpygocomma_1_1r9_1_1_r9_1a6f79232c2460bc70427e646cbb92ea38)`(self,timeout,retry)` 
+#### `public def `[`ask_last`](#classpygocomma_1_1r9_1_1_r9_1a7d21a233927822a2f85addc4b8c64a97)`(self,timeout,retry)` 
+
+Sends ping to R9 object to get last command.
+
+This command is sent not crypted
+
+#### Parameters
+* `timeout` [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+
+* `retry` [int] Number of retries to make if no device is found (optional)
+
+#### Returns
+[dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
+
+#### `public def `[`ping`](#classpygocomma_1_1r9_1_1_r9_1ae9be1fbd653c8e9ebcfb9ae57bb38c76)`(self,timeout,retry)` 
 
 Sends ping to R9 object to see if it is online.
 
@@ -213,7 +230,7 @@ Sends ping to R9 object to see if it is online.
 * `retry` [int] Number of retries to make if no device is found (optional)
 
 #### Returns
-[boolean] True if R9 is alive; False otherwise.
+[bytes|NoneType] On successful send, bytes got from R9 are returned; None otherwise.
 
 #### `public def `[`send_ir`](#classpygocomma_1_1r9_1_1_r9_1a9b40254ebc3e0174a76ac0c64105ae3d)`(self,keybytes,timeout,retry)` 
 

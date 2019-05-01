@@ -57,6 +57,15 @@ class R9:
         "uid": ''
     }
     
+    ASK_LAST_DICT = {
+        "devId": '',
+        "gwId": ''
+    }
+    
+    ASK_LAST_COMMAND = 0x0a
+    ASK_LAST_RESP_COMMAND = 0x0a
+    
+    
     PING_COMMAND = 9
     PING_RESP_COMMAND = 9
     PING_DICT = {
@@ -257,7 +266,7 @@ class R9:
                     _LOGGER.error("Error in discovery process %s",traceback.format_exc())
         return rv
     
-    def __init__(self,hp,idv,key,timeout = 5):
+    def __init__(self,hp,idv,key,timeout = 5,force_reconnect_s = 20):
         """!
         Costructs R9 remote Object
     
@@ -268,6 +277,8 @@ class R9:
         @param key: [string|bytes] key used to encrypt/decrypt messages from/to R9
         
         @param timeout: [int] timeout to be used in TCP communication (optional)
+        
+        @param force_reconnect_s: [int] seconds after which to force reconnection
           
         """
         self._hp = hp
@@ -281,6 +292,8 @@ class R9:
         self._uid = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
         self._reader = None
         self._writer = None
+        self._contime = 0
+        self._force_reconnect_s = force_reconnect_s
     
     def __repr__(self):
         """!
@@ -299,6 +312,8 @@ class R9:
             if self._writer:
                 self._writer.close()
                 await self._writer.wait_closed()
+        except:
+            pass
         finally:
             self._writer = None
             self._reader = None
@@ -306,11 +321,15 @@ class R9:
     
     async def _init_connection(self):
         try:
+            if self._force_reconnect_s>0 and time.time()-self._contime>self._force_reconnect_s:
+                await self.destroy_connection()
             if not self._writer:
+                _LOGGER.info("Connecting to %s:%d (TCP)",*self._hp)
                 self._reader,self._writer = await asyncio.open_connection(*self._hp)
+                self._contime = time.time()
             return True
         except BaseException as ex:
-            _LOGGER.error("Cannot estabilish connection %s",ex)
+            _LOGGER.error("Cannot estabilish connection %s: %s",ex,traceback.format_exc())
             await self.destroy_connection()
             return False
         except:
@@ -425,8 +444,46 @@ class R9:
             return CD_RETURN_IMMEDIATELY,retdata
         else:
             return CD_CONTINUE_WAITING,None
-    
-    async def ping(self,timeout = -1,retry = 1):
+        
+    def _check_ask_last_resp(self,retdata):
+        dictok = self._generic_check_resp(retdata,R9.ASK_LAST_RESP_COMMAND)
+        if dictok:
+            payload = retdata[20:-8]
+            try:
+                jsonstr = payload.decode('utf-8')
+            except BaseException as ex:
+                _LOGGER.warning("CheckResp decode %s %s",ex,binascii.hexlify(payload))
+                return CD_CONTINUE_WAITING,None
+            except:
+                _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
+                return CD_CONTINUE_WAITING,None
+            try:
+                jsondec = json.loads(jsonstr)
+            except BaseException as ex:
+                _LOGGER.warning("CheckResp jsonp %s %s",ex,jsonstr)
+                return CD_CONTINUE_WAITING,None
+            except:
+                _LOGGER.warning("CheckResp jsonp %s",jsonstr)
+                return CD_CONTINUE_WAITING,None
+            if ("devId" in jsondec and jsondec['devId']==self._id) or\
+               ("gwId" in jsondec and jsondec['gwId']==self._id):
+                return CD_RETURN_IMMEDIATELY,jsondec
+        return CD_CONTINUE_WAITING,None
+            
+    async def ask_last(self,timeout = -1,retry = 2):
+        """!
+        Sends ping to R9 object to get last command. This command is sent not crypted
+        
+        @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
+        
+        @param retry: [int] Number of retries to make if no device is found (optional)
+        
+        @return [dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
+          
+        """
+        pld = self._get_payload_bytes(R9.ASK_LAST_COMMAND,self._get_ask_last_bytes())
+        return await self._tcp_protocol(pld, self._check_ask_last_resp, timeout, retry)
+    async def ping(self,timeout = -1,retry = 2):
         """!
         Sends ping to R9 object to see if it is online
         
@@ -434,7 +491,7 @@ class R9:
         
         @param retry: [int] Number of retries to make if no device is found (optional)
         
-        @return [boolean] True if R9 is alive; False otherwise.
+        @return [bytes|NoneType] On successful send, bytes got from R9 are returned; None otherwise.
           
         """
         pld = self._get_payload_bytes(R9.PING_COMMAND,{})
@@ -549,10 +606,12 @@ class R9:
                     if data:
                         self._writer.write(data)
                         await self._writer.drain()
+                        self._contime = time.time()
                         self._pktnum+=1
                     while passed<timeout:
                         try:
-                            rec_data = await asyncio.wait_for(self._reader.read(1000), timeout-passed)
+                            rec_data = await asyncio.wait_for(self._reader.read(4096), timeout-passed)
+                            #_LOGGER.info("Received[%s:%d][%d] %s",*self._hp,len(rec_data),binascii.hexlify(rec_data))
                             rv,rec_data = check_data_fun(rec_data) 
                             if rv==CD_RETURN_IMMEDIATELY:
                                 return rec_data
@@ -570,10 +629,13 @@ class R9:
                         break
             except asyncio.TimeoutError:
                 _LOGGER.warning("Protocol[%s:%d] connecting timeout",*self._hp)
+                await self.destroy_connection()
             except BaseException as ex:
                 _LOGGER.warning("Protocol[%s:%d] error %s",*self._hp,ex)
+                await self.destroy_connection()
             except:
-                _LOGGER.warning("Protocol[%s:%d] error",*self._hp)
+                _LOGGER.warning("Protocol[%s:%d] error %s",*self._hp,traceback.format_exc())
+                await self.destroy_connection()
         await self.destroy_connection()
         return None
     
@@ -594,12 +656,14 @@ class R9:
         return filld
     
     def _get_payload_bytes(self,command,filled_dict):
-        if len(filled_dict):
+        if not filled_dict:
+            pldall = bytes()
+        elif isinstance(filled_dict, dict):
             pld = self._prepare_payload(filled_dict)
             md5bytes = self._get_md5_hash(pld)
             pldall = md5bytes+pld
         else:
-            pldall = bytes()
+            pldall = filled_dict
         ln = len(pldall)+16-8
         docrc = b'\x00\x00\x55\xAA'+struct.pack('>I',self._pktnum)+struct.pack('>I',command)+struct.pack('>I',ln)+pldall
         crcbytes = struct.pack('>I',R9.crc32(docrc))
@@ -613,6 +677,11 @@ class R9:
     
     def _get_study_dict(self):
         return self._generic_fill_dict(R9.STUDY_DICT)
+    
+    def _get_ask_last_bytes(self):
+        R9.ASK_LAST_DICT["devId"] = self._id
+        R9.ASK_LAST_DICT["gwId"] = self._id
+        return json.dumps(R9.ASK_LAST_DICT).encode()
     
     def _get_study_exit_dict(self):
         return self._generic_fill_dict(R9.STUDY_EXIT_DICT)
@@ -634,7 +703,22 @@ if __name__ == '__main__': # pragma: no cover
         for i in range(n):
             _LOGGER.debug("Counter is %d",i)
             await asyncio.sleep(1)
-    
+    async def ping_test(*args):
+        a = R9(('192.168.25.55',DEFAULT_PORT),args[2],args[3])
+        rv = await a.ping()
+        if rv:
+            _LOGGER.info("Ping OK %s",binascii.hexlify(rv))
+        else:
+            _LOGGER.warning("Ping failed")
+        await a.destroy_connection()
+    async def ask_last_test(*args):
+        a = R9(('192.168.25.55',DEFAULT_PORT),args[2],args[3])
+        rv = await a.ask_last()
+        if rv:
+            _LOGGER.info("Ask last OK %s",rv)
+        else:
+            _LOGGER.warning("Ask last failed")
+        await a.destroy_connection()
     async def discovery_test(*args):
         rv = await R9.discovery(int(args[2]))
         if rv:
@@ -682,11 +766,18 @@ if __name__ == '__main__': # pragma: no cover
     _LOGGER.addHandler(handler)
     loop = asyncio.get_event_loop()
     try:
-        asyncio.ensure_future(testFake(50))
+        asyncio.ensure_future(testFake(150))
         if sys.argv[1]=="learn":
             loop.run_until_complete(learn_test(*sys.argv))
         elif sys.argv[1]=="discovery":
             loop.run_until_complete(discovery_test(*sys.argv))
+        elif sys.argv[1]=="ping":
+            loop.run_until_complete(ping_test(*sys.argv))
+        elif sys.argv[1]=="asklast":
+            loop.run_until_complete(ask_last_test(*sys.argv))
+        elif sys.argv[1]=="pingst":
+            for i in range(int(sys.argv[4])):
+                loop.run_until_complete(ping_test(*sys.argv))
         else:
         #loop.run_until_complete(emit_test('00000000a801000000000000000098018e11951127029b0625029906270299062702380227023a0225023802270238022d023202270299062702990627029806270238022702380227023802270238022802370227023802270238022702980627023802240245021c02380227023802270238022702980627029c0623023802270298062702990627029b062502990627029906270220b7a1119d11270299062702990628029b06250238022702380227023802270238022702380227029906270299062702990627023802270238022a0234022702380227023802260238022702380226029a06260238022602380226023802260241021e02380227029b0624029906270238022702980627029b0625029906270299062702990629021db79f11a2112502990627029b0625029906270238022702380227023802270238022a02350227029906270299062702990628023702260238022702380227023802270238022702380226023b02240299062702380226023802270238022602380227023c0223029906270299062702380226029b062402990627029906270299062802980627020000'))
             loop.run_until_complete(emit_test(*sys.argv))
