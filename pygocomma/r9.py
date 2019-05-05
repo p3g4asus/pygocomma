@@ -324,7 +324,7 @@ class R9:
             if self._force_reconnect_s>0 and time.time()-self._contime>self._force_reconnect_s:
                 await self.destroy_connection()
             if not self._writer:
-                _LOGGER.info("Connecting to %s:%d (TCP)",*self._hp)
+                _LOGGER.debug("Connecting to %s:%d (TCP)",*self._hp)
                 self._reader,self._writer = await asyncio.open_connection(*self._hp)
                 self._contime = time.time()
             return True
