@@ -518,7 +518,7 @@ class R9:
         else:
             return CD_CONTINUE_WAITING,None
     
-    async def send_ir(self,keybytes,timeout = -1,retry=3):
+    async def emit_ir(self,keybytes,timeout = -1,retry=3):
         """!
         Sends ir to the R9 device
     
@@ -589,7 +589,7 @@ class R9:
         @param timeout: [int] timeout to be used in TCP communication (optional). Default value is 30 seconds. If awaited, this method will block until a key is not received or
         timeout seconds have been passed
         
-        @return [bytes|NoneType] On successful key reception, the byte object representing the learned key is returned. this can be used with send_ir function for future key sending. It returns
+        @return [bytes|NoneType] On successful key reception, the byte object representing the learned key is returned. this can be used with emit_ir function for future key sending. It returns
         None on error or on timeout (no key was pressed/detected) 
         """
         return await self._tcp_protocol(None, self._check_learned_key, timeout,1)
@@ -704,7 +704,7 @@ if __name__ == '__main__': # pragma: no cover
             _LOGGER.debug("Counter is %d",i)
             await asyncio.sleep(1)
     async def ping_test(*args):
-        a = R9(('192.168.25.55',DEFAULT_PORT),args[2],args[3])
+        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
         rv = await a.ping()
         if rv:
             _LOGGER.info("Ping OK %s",binascii.hexlify(rv))
@@ -712,7 +712,7 @@ if __name__ == '__main__': # pragma: no cover
             _LOGGER.warning("Ping failed")
         await a.destroy_connection()
     async def ask_last_test(*args):
-        a = R9(('192.168.25.55',DEFAULT_PORT),args[2],args[3])
+        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
         rv = await a.ask_last()
         if rv:
             _LOGGER.info("Ask last OK %s",rv)
@@ -728,20 +728,20 @@ if __name__ == '__main__': # pragma: no cover
             
     async def emit_test(*args):
         import re
-        mo = re.search('^[a-fA-F0-9]+$', args[4])
+        mo = re.search('^[a-fA-F0-9]+$', args[5])
         if mo:
-            payload = binascii.unhexlify(args[4])
+            payload = binascii.unhexlify(args[5])
         else:
-            payload = b64decode(args[4])
-        a = R9(('192.168.25.55',DEFAULT_PORT),args[2],args[3])
-        rv = await a.send_ir(payload)
+            payload = b64decode(args[5])
+        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
+        rv = await a.emit_ir(payload)
         if rv:
             _LOGGER.info("Emit OK %s",binascii.hexlify(rv).decode('utf-8'))
         else:
             _LOGGER.warning("Emit failed")
         await a.destroy_connection()
     async def learn_test(*args):
-        a = R9(('192.168.25.55',DEFAULT_PORT),args[2],args[3])
+        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
         rv = await a.enter_learning_mode()
         if rv:
             _LOGGER.info("Entered learning mode (%s): please press key",rv)
@@ -776,7 +776,7 @@ if __name__ == '__main__': # pragma: no cover
         elif sys.argv[1]=="asklast":
             loop.run_until_complete(ask_last_test(*sys.argv))
         elif sys.argv[1]=="pingst":
-            for i in range(int(sys.argv[4])):
+            for i in range(int(sys.argv[5])):
                 loop.run_until_complete(ping_test(*sys.argv))
         else:
         #loop.run_until_complete(emit_test('00000000a801000000000000000098018e11951127029b0625029906270299062702380227023a0225023802270238022d023202270299062702990627029806270238022702380227023802270238022802370227023802270238022702980627023802240245021c02380227023802270238022702980627029c0623023802270298062702990627029b062502990627029906270220b7a1119d11270299062702990628029b06250238022702380227023802270238022702380227029906270299062702990627023802270238022a0234022702380227023802260238022702380226029a06260238022602380226023802260241021e02380227029b0624029906270238022702980627029b0625029906270299062702990629021db79f11a2112502990627029b0625029906270238022702380227023802270238022a02350227029906270299062702990628023702260238022702380227023802270238022702380226023b02240299062702380226023802270238022602380227023c0223029906270299062702380226029b062402990627029906270299062802980627020000'))
