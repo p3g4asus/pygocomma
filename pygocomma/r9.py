@@ -337,7 +337,7 @@ class R9:
             await self.destroy_connection()
             return False
     
-    def _generic_check_resp(self,retdata,command,command_in_dict = None):
+    def _generic_check_resp(self,retdata,command,command_in_dict = None,status_ok = [0]):
         """!
         Checks payload of TCP packet got from R9 device. This includes Satus value check, CRC32 check, AES decryption (if needed), and MD5 check (if needed)
     
@@ -347,6 +347,8 @@ class R9:
         
         @param command_in_dict: [string|NoneType] Command that is expected in the packet JSON dps["1"]. If NoneType, no JSON is expected in packet content. If equal to '', 
         no dps["1"] is expected in packet JSON
+        
+        @param status_ok: [list] Accepted status codes. Defaults to [0]
         
         @return [dict|boolean] On successful check if no JSON content is present, True is returned, Otherwise the parsed dict is returned.
         If check fails, False is returned
@@ -377,8 +379,8 @@ class R9:
             _LOGGER.warning("CheckResp crc %d!=%d",crcorig,crcconf)
             return False
         statusconf = struct.unpack('>I', retdata[16:20])[0]
-        if statusconf!=0:
-            _LOGGER.warning("CheckResp status %d!=%d",0,statusconf)
+        if statusconf not in status_ok:
+            _LOGGER.warning("CheckResp status %d!=%d",status_ok,statusconf)
             return False
         if command_in_dict is None:
             return True
@@ -446,7 +448,7 @@ class R9:
             return CD_CONTINUE_WAITING,None
         
     def _check_ask_last_resp(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.ASK_LAST_RESP_COMMAND)
+        dictok = self._generic_check_resp(retdata,R9.ASK_LAST_RESP_COMMAND,status_ok=[0,1])
         if dictok:
             payload = retdata[20:-8]
             try:
@@ -457,6 +459,8 @@ class R9:
             except:
                 _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
                 return CD_CONTINUE_WAITING,None
+            if jsonstr.find("json obj")>=0:
+                return CD_RETURN_IMMEDIATELY,{"devId":self._id}
             try:
                 jsondec = json.loads(jsonstr)
             except BaseException as ex:
