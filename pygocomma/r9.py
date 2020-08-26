@@ -10,14 +10,16 @@ from base64 import b64decode, b64encode
 import json
 import time
 from Crypto.Cipher import AES
-import random, string
+import random
+import string
 import binascii
 from hashlib import md5
 from . import _LOGGER
-from .const import (CD_ADD_AND_CONTINUE_WAITING,CD_RETURN_IMMEDIATELY,CD_CONTINUE_WAITING,CD_ABORT_AND_RETRY)
+from .const import (CD_ADD_AND_CONTINUE_WAITING, CD_RETURN_IMMEDIATELY, CD_CONTINUE_WAITING, CD_ABORT_AND_RETRY)
 from .asyncio_udp import open_local_endpoint
 
 DEFAULT_PORT = 6668
+
 
 class R9:
     STUDY_KEY_DICT = {
@@ -26,7 +28,7 @@ class R9:
             "1": "study_key",
             "10": 300,
             "7": '',
-            #"8": keyorig
+            # "8": keyorig
         },
         "t": 0,
         "uid": ''
@@ -46,7 +48,7 @@ class R9:
         "t": 0,
         "uid": ''
     }
-    
+
     STUDY_EXIT_DICT = {
         "devId": '',
         "dps": {
@@ -56,25 +58,24 @@ class R9:
         "t": 0,
         "uid": ''
     }
-    
+
     ASK_LAST_DICT = {
         "devId": '',
         "gwId": ''
     }
-    
+
     ASK_LAST_COMMAND = 0x0a
     ASK_LAST_RESP_COMMAND = 0x0a
-    
-    
+
     PING_COMMAND = 9
     PING_RESP_COMMAND = 9
     PING_DICT = {
     }
-    
+
     PROTOCOL_VERSION_BYTES = b'3.1'
-    
+
     LEARNED_COMMAND = 8
-    
+
     crc32Table = [
       0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA,
       0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
@@ -141,113 +142,105 @@ class R9:
       0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94,
       0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
     ]
-    
+
     @staticmethod
     def crc32(cbytes):
-        crc = 0xFFFFFFFF;
+        crc = 0xFFFFFFFF
         for b in cbytes:
             crc = (crc >> 8) ^ R9.crc32Table[(crc ^ b) & 255]
-        return crc ^ 0xFFFFFFFF;
-    
+        return crc ^ 0xFFFFFFFF
+
     @staticmethod
     def _pad(s):
         padnum = 16 - len(s) % 16
         return s + padnum * chr(padnum)
-    
+
     @staticmethod
     def _unpad(s):
         return s[:-ord(s[len(s)-1:])]
-    
+
     @staticmethod
-    def check_discovery_packet(retdata,addr):
+    def check_discovery_packet(retdata, addr):
         lenorig = len(retdata)
-        if lenorig<=12+8+8:
-            _LOGGER.warning("CheckResp small len=%d",lenorig)
+        if lenorig <= 12 + 8 + 8:
+            _LOGGER.warning("CheckResp small len=%d", lenorig)
             return CD_CONTINUE_WAITING
-        lenconf = struct.unpack('>I', retdata[12:16])[0]+8+8
-        if lenconf!=lenorig:
-            _LOGGER.warning("CheckResp len %d!=%d",lenorig,lenconf)
+        lenconf = struct.unpack('>I', retdata[12:16])[0] + 8 + 8
+        if lenconf != lenorig:
+            _LOGGER.warning("CheckResp len %d!=%d", lenorig, lenconf)
             return CD_CONTINUE_WAITING
         headerconf = struct.unpack('>I', retdata[0:4])[0]
-        if headerconf!=0x000055AA:
-            _LOGGER.warning("CheckResp header %d!=%d",0x000055AA,headerconf)
+        if headerconf != 0x000055AA:
+            _LOGGER.warning("CheckResp header %d!=%d", 0x000055AA, headerconf)
             return CD_CONTINUE_WAITING
         footerconf = struct.unpack('>I', retdata[-4:])[0]
-        if footerconf!=0x0000AA55:
-            _LOGGER.warning("CheckResp footer %d!=%d",0x0000AA55,headerconf)
+        if footerconf != 0x0000AA55:
+            _LOGGER.warning("CheckResp footer %d!=%d", 0x0000AA55, headerconf)
             return CD_CONTINUE_WAITING
-        crcconf =  struct.unpack('>I', retdata[-8:-4])[0]
-        crcorig = R9.crc32(retdata[0:-8])        
-        if crcconf!=crcorig:
-            _LOGGER.warning("CheckResp crc %d!=%d",crcorig,crcconf)
+        crcconf = struct.unpack('>I', retdata[-8:-4])[0]
+        crcorig = R9.crc32(retdata[0:-8])
+        if crcconf != crcorig:
+            _LOGGER.warning("CheckResp crc %d!=%d", crcorig, crcconf)
             return CD_CONTINUE_WAITING
         statusconf = struct.unpack('>I', retdata[16:20])[0]
-        if statusconf!=0:
-            _LOGGER.warning("CheckResp status %d!=%d",0,statusconf)
+        if statusconf != 0:
+            _LOGGER.warning("CheckResp status %d!=%d", 0, statusconf)
             return CD_CONTINUE_WAITING
         payload = retdata[20:-8]
         try:
             jsonstr = payload.decode('utf-8')
         except BaseException as ex:
-            _LOGGER.warning("CheckResp decode %s %s",ex,binascii.hexlify(payload))
-            return CD_CONTINUE_WAITING
-        except:
-            _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
+            _LOGGER.warning("CheckResp decode %s %s", ex, binascii.hexlify(payload))
             return CD_CONTINUE_WAITING
         try:
             jsondec = json.loads(jsonstr)
         except BaseException as ex:
-            _LOGGER.warning("CheckResp jsonp %s %s",ex,jsonstr)
-            return CD_CONTINUE_WAITING
-        except:
-            _LOGGER.warning("CheckResp jsonp %s",jsonstr)
+            _LOGGER.warning("CheckResp jsonp %s %s", ex, jsonstr)
             return CD_CONTINUE_WAITING
         if "gwId" in jsondec:
-            return CD_ADD_AND_CONTINUE_WAITING,jsondec
+            return CD_ADD_AND_CONTINUE_WAITING, jsondec
         else:
             return CD_CONTINUE_WAITING
-        
+
     @staticmethod
-    async def discovery(timeout,retry=3):
+    async def discovery(timeout, retry=3):
         """!
         Discovers Tuya devices listening to broadcast UDP messages sent to 6666 port
-    
+
         @param timeout: [int] time to be waited for broadcast messages
-        
+
         @param retry: [int] Number of retries to make if no device is found (Obtional)
-        
+
         @return [dict] A dict whose keys are ip addresses of Tuya devices and values are R9 objects. Please note that th found R9 devices
         cannot be used before setting the correct encryption key (it is set to b'0123456789abcdef' by default)
-          
+
         """
         out_data = None
         _local = None
-        addr = ('255.255.255.255',6666)
+        addr = ('255.255.255.255', 6666)
         for _ in range(retry):
             try:
-                _local = await open_local_endpoint(port=6666,allow_broadcast = True)
+                _local = await open_local_endpoint(port=6666, allow_broadcast=True)
                 if _local:
                     for _ in range(retry):
-                        out_data = await _local.protocol(None,addr,R9.check_discovery_packet,timeout,1,True)
+                        out_data = await _local.protocol(None, addr, R9.check_discovery_packet, timeout, 1, True)
                         if out_data:
                             break
                     break
             except BaseException as ex:
-                _LOGGER.error("Protocol[%s:%d] error: %s",*addr,str(ex))
-            except:
-                _LOGGER.error("Protocol[%s:%d] error %s",*addr,traceback.format_exc())
+                _LOGGER.error("Protocol[%s:%d] error: %s", *addr, str(ex))
             finally:
                 if _local:
                     try:
                         _local.abort()
-                    except:
+                    except Exception:
                         pass
                     finally:
                         _local = None
         if _local:
             try:
                 _local.abort()
-            except:
+            except Exception:
                 pass
             finally:
                 _local = None
@@ -257,29 +250,27 @@ class R9:
                 try:
                     it = o[0]
                     if it['ip'] not in rv:
-                        obj = R9((it['ip'],DEFAULT_PORT) ,it['gwId'],b'0123456789abcdef')
+                        obj = R9((it['ip'], DEFAULT_PORT), it['gwId'], b'0123456789abcdef')
                         rv[it['ip']] = obj
-                        _LOGGER.info("Discovered %s",obj)
+                        _LOGGER.info("Discovered %s", obj)
                 except BaseException as ex:
                     _LOGGER.error("Error in discovery process %s", ex)
-                except:
-                    _LOGGER.error("Error in discovery process %s",traceback.format_exc())
         return rv
-    
-    def __init__(self,hp,idv,key,timeout = 5,force_reconnect_s = 20):
+
+    def __init__(self, hp, idv, key, timeout=5, force_reconnect_s=20):
         """!
         Costructs R9 remote Object
-    
+
         @param hp: [tuple] A tuple with host and port of the R9 remote
-    
+
         @param idv: [string] id of the R9 object
-        
+
         @param key: [string|bytes] key used to encrypt/decrypt messages from/to R9
-        
+
         @param timeout: [int] timeout to be used in TCP communication (optional)
-        
+
         @param force_reconnect_s: [int] seconds after which to force reconnection
-          
+
         """
         self._hp = hp
         self._id = idv
@@ -294,337 +285,315 @@ class R9:
         self._writer = None
         self._contime = 0
         self._force_reconnect_s = force_reconnect_s
-    
+
     def __repr__(self):
         """!
         Gets string representation of this R9 object
-        
+
         @return [string] string representation of this R9 object
-          
+
         """
-        return '(%s:%d) id=%s key=%s' %(*self._hp,self._id,self._key)
-    
+        return '(%s:%d) id=%s key=%s' % (*self._hp, self._id, self._key)
+
     async def destroy_connection(self):
         """!
-        Destroys the connection with the R9 device    
+        Destroys the connection with the R9 device
         """
         try:
             if self._writer:
                 self._writer.close()
                 await self._writer.wait_closed()
-        except:
+        except Exception:
             pass
         finally:
             self._writer = None
             self._reader = None
             self._pktnum = 1
-    
+
     async def _init_connection(self):
         try:
-            if self._force_reconnect_s>0 and time.time()-self._contime>self._force_reconnect_s:
+            if self._force_reconnect_s > 0 and time.time() - self._contime > self._force_reconnect_s:
                 await self.destroy_connection()
             if not self._writer:
-                _LOGGER.debug("Connecting to %s:%d (TCP)",*self._hp)
-                self._reader,self._writer = await asyncio.open_connection(*self._hp)
+                _LOGGER.debug("Connecting to %s:%d (TCP)", *self._hp)
+                self._reader, self._writer = await asyncio.open_connection(*self._hp)
                 self._contime = time.time()
             return True
         except BaseException as ex:
-            _LOGGER.error("Cannot estabilish connection %s: %s",ex,traceback.format_exc())
+            _LOGGER.error("Cannot estabilish connection %s: %s", str(ex), traceback.format_exc())
             await self.destroy_connection()
             return False
-        except:
-            _LOGGER.error("Cannot estabilish connection %s",traceback.format_exc())
-            await self.destroy_connection()
-            return False
-    
-    def _generic_check_resp(self,retdata,command,command_in_dict = None,status_ok = [0]):
+
+    def _generic_check_resp(self, retdata, command, command_in_dict=None, status_ok=[0]):
         """!
         Checks payload of TCP packet got from R9 device. This includes Satus value check, CRC32 check, AES decryption (if needed), and MD5 check (if needed)
-    
+
         @param retdata: [bytes] bytes of the TCP packet payload received prom R9 device
-        
+
         @param command: [int] Command that is expected in the packet header
-        
-        @param command_in_dict: [string|NoneType] Command that is expected in the packet JSON dps["1"]. If NoneType, no JSON is expected in packet content. If equal to '', 
+
+        @param command_in_dict: [string|NoneType] Command that is expected in the packet JSON dps["1"]. If NoneType, no JSON is expected in packet content. If equal to '',
         no dps["1"] is expected in packet JSON
-        
+
         @param status_ok: [list] Accepted status codes. Defaults to [0]
-        
+
         @return [dict|boolean] On successful check if no JSON content is present, True is returned, Otherwise the parsed dict is returned.
         If check fails, False is returned
         """
         lenorig = len(retdata)
-        if lenorig<12+8+8:
-            _LOGGER.warning("CheckResp small len=%d",lenorig)
+        if lenorig < 12 + 8 + 8:
+            _LOGGER.warning("CheckResp small len=%d", lenorig)
             return False
-        lenconf = struct.unpack('>I', retdata[12:16])[0]+8+8
-        if lenconf!=lenorig:
-            _LOGGER.warning("CheckResp len %d!=%d",lenorig,lenconf)
+        lenconf = struct.unpack('>I', retdata[12:16])[0] + 8 + 8
+        if lenconf != lenorig:
+            _LOGGER.warning("CheckResp len %d!=%d", lenorig, lenconf)
             return False
         commandconf = struct.unpack('>I', retdata[8:12])[0]
-        if commandconf!=command:
-            _LOGGER.warning("CheckResp command[%d] %d!=%d",lenorig,command,commandconf)
+        if commandconf != command:
+            _LOGGER.warning("CheckResp command[%d] %d!=%d", lenorig, command, commandconf)
             return False
         headerconf = struct.unpack('>I', retdata[0:4])[0]
-        if headerconf!=0x000055AA:
-            _LOGGER.warning("CheckResp header %d!=%d",0x000055AA,headerconf)
+        if headerconf != 0x000055AA:
+            _LOGGER.warning("CheckResp header %d!=%d", 0x000055AA, headerconf)
             return False
         footerconf = struct.unpack('>I', retdata[-4:])[0]
-        if footerconf!=0x0000AA55:
-            _LOGGER.warning("CheckResp footer %d!=%d",0x0000AA55,headerconf)
+        if footerconf != 0x0000AA55:
+            _LOGGER.warning("CheckResp footer %d!=%d", 0x0000AA55, headerconf)
             return False
-        crcconf =  struct.unpack('>I', retdata[-8:-4])[0]
-        crcorig = R9.crc32(retdata[0:-8])        
-        if crcconf!=crcorig:
-            _LOGGER.warning("CheckResp crc %d!=%d",crcorig,crcconf)
+        crcconf = struct.unpack('>I', retdata[-8:-4])[0]
+        crcorig = R9.crc32(retdata[0:-8])
+        if crcconf != crcorig:
+            _LOGGER.warning("CheckResp crc %d!=%d", crcorig, crcconf)
             return False
         statusconf = struct.unpack('>I', retdata[16:20])[0]
         if statusconf not in status_ok:
-            _LOGGER.warning("CheckResp status %d!=%d",status_ok,statusconf)
+            _LOGGER.warning("CheckResp status %d!=%d", status_ok, statusconf)
             return False
         if command_in_dict is None:
             return True
-        if lenorig<=12+8+8+16+len(R9.PROTOCOL_VERSION_BYTES):
-            _LOGGER.warning("CheckResp small2 len=%d",lenorig)
+        if lenorig <= 12 + 8 + 8 + 16 + len(R9.PROTOCOL_VERSION_BYTES):
+            _LOGGER.warning("CheckResp small2 len=%d", lenorig)
             return False
         protocolconf = retdata[20:23]
-        if protocolconf!=R9.PROTOCOL_VERSION_BYTES:
-            _LOGGER.warning("CheckResp prot %s!=%s",binascii.hexlify(R9.PROTOCOL_VERSION_BYTES),binascii.hexlify(protocolconf))
+        if protocolconf != R9.PROTOCOL_VERSION_BYTES:
+            _LOGGER.warning("CheckResp prot %s!=%s",
+                            binascii.hexlify(R9.PROTOCOL_VERSION_BYTES),
+                            binascii.hexlify(protocolconf))
             return False
         b64payload = retdata[39:-8]
         hashconf = self._get_md5_hash(b64payload)
         hashorig = retdata[20:39]
-        if hashconf!=hashorig:
-            _LOGGER.warning("CheckResp md5 %s!=%s",binascii.hexlify(hashorig),binascii.hexlify(hashconf))
+        if hashconf != hashorig:
+            _LOGGER.warning("CheckResp md5 %s!=%s", binascii.hexlify(hashorig), binascii.hexlify(hashconf))
             return False
         try:
             cryptpayload = b64decode(b64payload)
         except BaseException as ex:
-            _LOGGER.warning("CheckResp b64 %s %s",ex,binascii.hexlify(b64payload))
-            return False
-        except:
-            _LOGGER.warning("CheckResp b64 %s",binascii.hexlify(b64payload))
+            _LOGGER.warning("CheckResp b64 %s %s", str(ex), binascii.hexlify(b64payload))
             return False
         try:
             payload = self._cipher.decrypt(cryptpayload)
             payload = R9._unpad(payload)
         except BaseException as ex:
-            _LOGGER.warning("CheckResp decry %s %s",ex,binascii.hexlify(cryptpayload))
-            return False
-        except:
-            _LOGGER.warning("CheckResp decry %s",binascii.hexlify(cryptpayload))
+            _LOGGER.warning("CheckResp decry %s %s", str(ex), binascii.hexlify(cryptpayload))
             return False
         try:
             jsonstr = payload.decode('utf-8')
         except BaseException as ex:
-            _LOGGER.warning("CheckResp decode %s %s",ex,binascii.hexlify(payload))
-            return False
-        except:
-            _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
+            _LOGGER.warning("CheckResp decode %s %s", str(ex), binascii.hexlify(payload))
             return False
         try:
             jsondec = json.loads(jsonstr)
         except BaseException as ex:
-            _LOGGER.warning("CheckResp jsonp %s %s",ex,jsonstr)
-            return False
-        except:
-            _LOGGER.warning("CheckResp jsonp %s",jsonstr)
+            _LOGGER.warning("CheckResp jsonp %s %s", str(ex), jsonstr)
             return False
         if not len(command_in_dict):
             return jsondec
         if "dps" not in jsondec or "1" not in jsondec["dps"]:
-            _LOGGER.warning("CheckResp struct %s",jsondec)
+            _LOGGER.warning("CheckResp struct %s", jsondec)
             return False
-        if jsondec["dps"]["1"]!=command_in_dict:
-            _LOGGER.warning("CheckResp command %s!=%s",command_in_dict,jsondec["dps"]["1"])
+        if jsondec["dps"]["1"] != command_in_dict:
+            _LOGGER.warning("CheckResp command %s!=%s", command_in_dict, jsondec["dps"]["1"])
             return False
         return jsondec
-    
-    def _check_ping_resp(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.PING_RESP_COMMAND)
+
+    def _check_ping_resp(self, retdata):
+        dictok = self._generic_check_resp(retdata, R9.PING_RESP_COMMAND)
         if dictok:
-            return CD_RETURN_IMMEDIATELY,retdata
+            return CD_RETURN_IMMEDIATELY, retdata
         else:
-            return CD_CONTINUE_WAITING,None
-        
-    def _check_ask_last_resp(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.ASK_LAST_RESP_COMMAND,status_ok=[0,1])
+            return CD_CONTINUE_WAITING, None
+
+    def _check_ask_last_resp(self, retdata):
+        dictok = self._generic_check_resp(retdata, R9.ASK_LAST_RESP_COMMAND, status_ok=[0, 1])
         if dictok:
             payload = retdata[20:-8]
             try:
                 jsonstr = payload.decode('utf-8')
             except BaseException as ex:
-                _LOGGER.warning("CheckResp decode %s %s",ex,binascii.hexlify(payload))
-                return CD_CONTINUE_WAITING,None
-            except:
-                _LOGGER.warning("CheckResp decode %s",binascii.hexlify(payload))
-                return CD_CONTINUE_WAITING,None
-            if jsonstr.find("json obj")>=0:
-                return CD_RETURN_IMMEDIATELY,{"devId":self._id}
+                _LOGGER.warning("CheckResp decode %s %s", str(ex), binascii.hexlify(payload))
+                return CD_CONTINUE_WAITING, None
+            if jsonstr.find("json obj") >= 0:
+                return CD_RETURN_IMMEDIATELY, {"devId": self._id}
             try:
                 jsondec = json.loads(jsonstr)
             except BaseException as ex:
-                _LOGGER.warning("CheckResp jsonp %s %s",ex,jsonstr)
-                return CD_CONTINUE_WAITING,None
-            except:
-                _LOGGER.warning("CheckResp jsonp %s",jsonstr)
-                return CD_CONTINUE_WAITING,None
-            if ("devId" in jsondec and jsondec['devId']==self._id) or\
-               ("gwId" in jsondec and jsondec['gwId']==self._id):
-                return CD_RETURN_IMMEDIATELY,jsondec
-        return CD_CONTINUE_WAITING,None
-            
-    async def ask_last(self,timeout = -1,retry = 2):
+                _LOGGER.warning("CheckResp jsonp %s %s", str(ex), jsonstr)
+                return CD_CONTINUE_WAITING, None
+            if ("devId" in jsondec and jsondec['devId'] == self._id) or\
+               ("gwId" in jsondec and jsondec['gwId'] == self._id):
+                return CD_RETURN_IMMEDIATELY, jsondec
+        return CD_CONTINUE_WAITING, None
+
+    async def ask_last(self, timeout=-1, retry=2):
         """!
         Sends ping to R9 object to get last command. This command is sent not crypted
-        
+
         @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
-        
+
         @param retry: [int] Number of retries to make if no device is found (optional)
-        
+
         @return [dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
-          
+
         """
-        pld = self._get_payload_bytes(R9.ASK_LAST_COMMAND,self._get_ask_last_bytes())
+        pld = self._get_payload_bytes(R9.ASK_LAST_COMMAND, self._get_ask_last_bytes())
         return await self._tcp_protocol(pld, self._check_ask_last_resp, timeout, retry)
-    async def ping(self,timeout = -1,retry = 2):
+
+    async def ping(self, timeout=-1, retry=2):
         """!
         Sends ping to R9 object to see if it is online
-        
+
         @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
-        
+
         @param retry: [int] Number of retries to make if no device is found (optional)
-        
+
         @return [bytes|NoneType] On successful send, bytes got from R9 are returned; None otherwise.
-          
+
         """
-        pld = self._get_payload_bytes(R9.PING_COMMAND,{})
+        pld = self._get_payload_bytes(R9.PING_COMMAND, {})
         return await self._tcp_protocol(pld, self._check_ping_resp, timeout, retry)
-    
-    def _check_study_resp(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.STUDY_RESP_COMMAND,"study")
+
+    def _check_study_resp(self, retdata):
+        dictok = self._generic_check_resp(retdata, R9.STUDY_RESP_COMMAND, "study")
         if dictok:
-            return CD_RETURN_IMMEDIATELY,dictok
+            return CD_RETURN_IMMEDIATELY, dictok
         else:
-            return CD_CONTINUE_WAITING,None
-        
-    def _check_study_key_resp(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.STUDY_KEY_RESP_1_COMMAND)
+            return CD_CONTINUE_WAITING, None
+
+    def _check_study_key_resp(self, retdata):
+        dictok = self._generic_check_resp(retdata, R9.STUDY_KEY_RESP_1_COMMAND)
         if dictok:
-            return CD_RETURN_IMMEDIATELY,retdata
+            return CD_RETURN_IMMEDIATELY, retdata
         else:
-            return CD_CONTINUE_WAITING,None
-        
-    def _check_study_exit_resp(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.STUDY_EXIT_RESP_COMMAND,"study_exit")
+            return CD_CONTINUE_WAITING, None
+
+    def _check_study_exit_resp(self, retdata):
+        dictok = self._generic_check_resp(retdata, R9.STUDY_EXIT_RESP_COMMAND, "study_exit")
         if dictok:
-            return CD_RETURN_IMMEDIATELY,dictok
+            return CD_RETURN_IMMEDIATELY, dictok
         else:
-            return CD_CONTINUE_WAITING,None
-    
-    async def emit_ir(self,keybytes,timeout = -1,retry=3):
+            return CD_CONTINUE_WAITING, None
+
+    async def emit_ir(self, keybytes, timeout=-1, retry=3):
         """!
         Sends ir to the R9 device
-    
+
         @param keybytes: [bytes] key to be emitted by R9 device. The key should be a byte object that represents lirc/arduino format array of little-endian shorts.
         This is the same format obtained with the learning process
-        
+
         @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
-        
+
         @param retry: [int] Number of retries to make if no device is found (optional)
-        
+
         @return [bytes|NoneType] On successful send, the array of bytes obtained by R9 device is returned. Otherwise return value is None
-          
+
         """
-        pld = self._get_payload_bytes(R9.STUDY_KEY_COMMAND,self._get_study_key_dict(keybytes))
-        return await self._tcp_protocol(pld, self._check_study_key_resp, timeout,retry)
-    
-    async def enter_learning_mode(self,timeout = -1,retry=3):
+        pld = self._get_payload_bytes(R9.STUDY_KEY_COMMAND, self._get_study_key_dict(keybytes))
+        return await self._tcp_protocol(pld, self._check_study_key_resp, timeout, retry)
+
+    async def enter_learning_mode(self, timeout=-1, retry=3):
         """!
         Puts R9 in learning mode
-    
+
         @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
-        
+
         @param retry: [int] Number of retries to make if no device is found (optional)
-        
+
         @return [dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
-          
+
         """
-        pld = self._get_payload_bytes(R9.STUDY_COMMAND,self._get_study_dict())
+        pld = self._get_payload_bytes(R9.STUDY_COMMAND, self._get_study_dict())
         return await self._tcp_protocol(pld, self._check_study_resp, timeout, retry)
-    
-    async def exit_learning_mode(self,timeout = -1,retry=3):
+
+    async def exit_learning_mode(self, timeout=-1, retry=3):
         """!
         Exits R9 learning mode
-    
+
         @param timeout: [int] timeout to be used in TCP communication (optional). If not specified, the timeout specified when constructing the R9 object will be used
-        
+
         @param retry: [int] Number of retries to make if no device is found (optional)
-        
+
         @return [dict|NoneType] On successful send, the decoded confirmation dict obtained by R9 device is returned. Otherwise return value is None
-          
+
         """
-        pld = self._get_payload_bytes(R9.STUDY_EXIT_COMMAND,self._get_study_exit_dict())
-        return await self._tcp_protocol(pld, self._check_study_exit_resp, timeout,retry)
-    
-    def _check_learned_key(self,retdata):
-        dictok = self._generic_check_resp(retdata,R9.LEARNED_COMMAND,"")
+        pld = self._get_payload_bytes(R9.STUDY_EXIT_COMMAND, self._get_study_exit_dict())
+        return await self._tcp_protocol(pld, self._check_study_exit_resp, timeout, retry)
+
+    def _check_learned_key(self, retdata):
+        dictok = self._generic_check_resp(retdata, R9.LEARNED_COMMAND, "")
         if dictok:
-            _LOGGER.debug("Learned dict %s",dictok)
+            _LOGGER.debug("Learned dict %s", dictok)
             if "dps" not in dictok or "2" not in dictok["dps"]:
-                _LOGGER.warning("CheckResp not2 %s",dictok)
-                return CD_ABORT_AND_RETRY,None
+                _LOGGER.warning("CheckResp not2 %s", dictok)
+                return CD_ABORT_AND_RETRY, None
             try:
                 keydec = b64decode(dictok["dps"]["2"].encode())
             except BaseException as ex:
-                _LOGGER.warning("CheckResp invalidkey %s %s",dictok,ex)
-                return CD_ABORT_AND_RETRY,None
-            except:
-                _LOGGER.warning("CheckResp invalidkey %s",dictok)
-                return CD_ABORT_AND_RETRY,None
-            return CD_RETURN_IMMEDIATELY,keydec
+                _LOGGER.warning("CheckResp invalidkey %s %s", dictok, str(ex))
+                return CD_ABORT_AND_RETRY, None
+            return CD_RETURN_IMMEDIATELY, keydec
         else:
-            return CD_CONTINUE_WAITING,None
-        
-    async def get_learned_key(self,timeout=30):
+            return CD_CONTINUE_WAITING, None
+
+    async def get_learned_key(self, timeout=30):
         """!
         Puts R9 in learning mode
-    
+
         @param timeout: [int] timeout to be used in TCP communication (optional). Default value is 30 seconds. If awaited, this method will block until a key is not received or
         timeout seconds have been passed
-        
+
         @return [bytes|NoneType] On successful key reception, the byte object representing the learned key is returned. this can be used with emit_ir function for future key sending. It returns
-        None on error or on timeout (no key was pressed/detected) 
+        None on error or on timeout (no key was pressed/detected)
         """
-        return await self._tcp_protocol(None, self._check_learned_key, timeout,1)
-        
-    async def _tcp_protocol(self,data,check_data_fun,timeout = -1,retry=1):
+        return await self._tcp_protocol(None, self._check_learned_key, timeout, 1)
+
+    async def _tcp_protocol(self, data, check_data_fun, timeout=-1, retry=1):
         lstdata = []
-        if timeout<0:
+        if timeout < 0:
             timeout = self._timeout
         for _ in range(retry):
             try:
                 passed = 0
                 starttime = time.time()
-                if await asyncio.wait_for(self._init_connection(),timeout):
+                if await asyncio.wait_for(self._init_connection(), timeout):
                     if data:
                         self._writer.write(data)
                         await self._writer.drain()
                         self._contime = time.time()
-                        self._pktnum+=1
-                    while passed<timeout:
+                        self._pktnum += 1
+                    while passed < timeout:
                         try:
                             rec_data = await asyncio.wait_for(self._reader.read(4096), timeout-passed)
-                            #_LOGGER.info("Received[%s:%d][%d] %s",*self._hp,len(rec_data),binascii.hexlify(rec_data))
-                            rv,rec_data = check_data_fun(rec_data) 
-                            if rv==CD_RETURN_IMMEDIATELY:
+                            # _LOGGER.info("Received[%s:%d][%d] %s",*self._hp,len(rec_data),binascii.hexlify(rec_data))
+                            rv, rec_data = check_data_fun(rec_data)
+                            if rv == CD_RETURN_IMMEDIATELY:
                                 return rec_data
-                            elif rv==CD_ABORT_AND_RETRY:
+                            elif rv == CD_ABORT_AND_RETRY:
                                 break
-                            elif rv==CD_ADD_AND_CONTINUE_WAITING:
+                            elif rv == CD_ADD_AND_CONTINUE_WAITING:
                                 lstdata.append(rec_data)
                         except asyncio.TimeoutError:
-                            _LOGGER.warning("Protocol[%s:%d] timeout",*self._hp)
+                            _LOGGER.warning("Protocol[%s:%d] timeout", *self._hp)
                             break
                         passed = time.time()-starttime
                     if lstdata:
@@ -632,34 +601,31 @@ class R9:
                     elif not data:
                         break
             except asyncio.TimeoutError:
-                _LOGGER.warning("Protocol[%s:%d] connecting timeout",*self._hp)
+                _LOGGER.warning("Protocol[%s:%d] connecting timeout", *self._hp)
                 await self.destroy_connection()
             except BaseException as ex:
-                _LOGGER.warning("Protocol[%s:%d] error %s",*self._hp,ex)
-                await self.destroy_connection()
-            except:
-                _LOGGER.warning("Protocol[%s:%d] error %s",*self._hp,traceback.format_exc())
+                _LOGGER.warning("Protocol[%s:%d] error %s", *self._hp, str(ex))
                 await self.destroy_connection()
         await self.destroy_connection()
         return None
-    
-    def _prepare_payload(self,dictjson):
+
+    def _prepare_payload(self, dictjson):
         txtjs = json.dumps(dictjson)
-        _LOGGER.debug("Send Schema (%d) %s",len(txtjs),txtjs)
+        _LOGGER.debug("Send Schema (%d) %s", len(txtjs), txtjs)
         txtjs = R9._pad(txtjs).encode()
         crypted_text = self._cipher.encrypt(txtjs)
-        _LOGGER.debug("Cipher (%d) %s",len(crypted_text),binascii.hexlify(crypted_text).decode('utf-8'))
+        _LOGGER.debug("Cipher (%d) %s", len(crypted_text), binascii.hexlify(crypted_text).decode('utf-8'))
         cifenc = b64encode(crypted_text)
-        _LOGGER.debug("B64 cipher (%d) %s",len(cifenc),cifenc.decode('utf-8'))
+        _LOGGER.debug("B64 cipher (%d) %s", len(cifenc), cifenc.decode('utf-8'))
         return cifenc
-    
-    def _generic_fill_dict(self,filld):
+
+    def _generic_fill_dict(self, filld):
         filld["devId"] = self._id
         filld['t'] = int(time.time())
         filld['uid'] = self._uid
         return filld
-    
-    def _get_payload_bytes(self,command,filled_dict):
+
+    def _get_payload_bytes(self, command, filled_dict):
         if not filled_dict:
             pldall = bytes()
         elif isinstance(filled_dict, dict):
@@ -669,67 +635,72 @@ class R9:
         else:
             pldall = filled_dict
         ln = len(pldall)+16-8
-        docrc = b'\x00\x00\x55\xAA'+struct.pack('>I',self._pktnum)+struct.pack('>I',command)+struct.pack('>I',ln)+pldall
-        crcbytes = struct.pack('>I',R9.crc32(docrc))
-        complete =  docrc+crcbytes+b'\x00\x00\xAA\x55'
-        _LOGGER.debug("Comp packet (%d) %s",len(complete),binascii.hexlify(complete).decode('utf-8'))
+        docrc = b'\x00\x00\x55\xAA' + struct.pack('>I', self._pktnum) + struct.pack('>I', command) + struct.pack('>I', ln) + pldall
+        crcbytes = struct.pack('>I', R9.crc32(docrc))
+        complete = docrc + crcbytes + b'\x00\x00\xAA\x55'
+        _LOGGER.debug("Comp packet (%d) %s", len(complete), binascii.hexlify(complete).decode('utf-8'))
         return complete
-    
-    def _get_study_key_dict(self,keybytes):
+
+    def _get_study_key_dict(self, keybytes):
         R9.STUDY_KEY_DICT["dps"]["7"] = b64encode(keybytes).decode('utf8')
         return self._generic_fill_dict(R9.STUDY_KEY_DICT)
-    
+
     def _get_study_dict(self):
         return self._generic_fill_dict(R9.STUDY_DICT)
-    
+
     def _get_ask_last_bytes(self):
         R9.ASK_LAST_DICT["devId"] = self._id
         R9.ASK_LAST_DICT["gwId"] = self._id
         return json.dumps(R9.ASK_LAST_DICT).encode()
-    
+
     def _get_study_exit_dict(self):
         return self._generic_fill_dict(R9.STUDY_EXIT_DICT)
-    
-    def _get_md5_hash(self,payload_bytes):
+
+    def _get_md5_hash(self, payload_bytes):
         preMd5String = b'data=' + payload_bytes + b'||lpv=' + R9.PROTOCOL_VERSION_BYTES + b'||' + self._key
         m = md5()
         m.update(preMd5String)
-        #print(repr(m.digest()))
+        # print(repr(m.digest()))
         hexdigest = m.hexdigest()
         s = hexdigest[8:][:16]
-        _LOGGER.debug("Computed md5 %s",s)
+        _LOGGER.debug("Computed md5 %s", s)
         return R9.PROTOCOL_VERSION_BYTES+s.encode()
-    
-if __name__ == '__main__': # pragma: no cover
+
+
+if __name__ == '__main__':  # pragma: no cover
     import sys
     import logging
+
     async def testFake(n):
         for i in range(n):
-            _LOGGER.debug("Counter is %d",i)
+            _LOGGER.debug("Counter is %d", i)
             await asyncio.sleep(1)
+
     async def ping_test(*args):
-        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
+        a = R9((args[2], DEFAULT_PORT), args[3], args[4])
         rv = await a.ping()
         if rv:
-            _LOGGER.info("Ping OK %s",binascii.hexlify(rv))
+            _LOGGER.info("Ping OK %s", binascii.hexlify(rv))
         else:
             _LOGGER.warning("Ping failed")
         await a.destroy_connection()
+
     async def ask_last_test(*args):
-        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
+        a = R9((args[2], DEFAULT_PORT), args[3], args[4])
         rv = await a.ask_last()
         if rv:
-            _LOGGER.info("Ask last OK %s",rv)
+            _LOGGER.info("Ask last OK %s", rv)
         else:
             _LOGGER.warning("Ask last failed")
         await a.destroy_connection()
+
     async def discovery_test(*args):
         rv = await R9.discovery(int(args[2]))
         if rv:
-            _LOGGER.info("Discovery OK %s",rv)
+            _LOGGER.info("Discovery OK %s", rv)
         else:
             _LOGGER.warning("Discovery failed")
-            
+
     async def emit_test(*args):
         import re
         mo = re.search('^[a-fA-F0-9]+$', args[5])
@@ -737,21 +708,22 @@ if __name__ == '__main__': # pragma: no cover
             payload = binascii.unhexlify(args[5])
         else:
             payload = b64decode(args[5])
-        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
+        a = R9((args[2], DEFAULT_PORT), args[3], args[4])
         rv = await a.emit_ir(payload)
         if rv:
-            _LOGGER.info("Emit OK %s",binascii.hexlify(rv).decode('utf-8'))
+            _LOGGER.info("Emit OK %s", binascii.hexlify(rv).decode('utf-8'))
         else:
             _LOGGER.warning("Emit failed")
         await a.destroy_connection()
+
     async def learn_test(*args):
-        a = R9((args[2],DEFAULT_PORT),args[3],args[4])
+        a = R9((args[2], DEFAULT_PORT), args[3], args[4])
         rv = await a.enter_learning_mode()
         if rv:
-            _LOGGER.info("Entered learning mode (%s): please press key",rv)
+            _LOGGER.info("Entered learning mode (%s): please press key", rv)
             rv = await a.get_learned_key()
             if rv:
-                _LOGGER.info("Obtained %s",binascii.hexlify(rv).decode('utf-8'))
+                _LOGGER.info("Obtained %s", binascii.hexlify(rv).decode('utf-8'))
             else:
                 _LOGGER.warning("No key pressed")
             rv = await a.exit_learning_mode()
@@ -771,27 +743,23 @@ if __name__ == '__main__': # pragma: no cover
     loop = asyncio.get_event_loop()
     try:
         asyncio.ensure_future(testFake(150))
-        if sys.argv[1]=="learn":
+        if sys.argv[1] == "learn":
             loop.run_until_complete(learn_test(*sys.argv))
-        elif sys.argv[1]=="discovery":
+        elif sys.argv[1] == "discovery":
             loop.run_until_complete(discovery_test(*sys.argv))
-        elif sys.argv[1]=="ping":
+        elif sys.argv[1] == "ping":
             loop.run_until_complete(ping_test(*sys.argv))
-        elif sys.argv[1]=="asklast":
+        elif sys.argv[1] == "asklast":
             loop.run_until_complete(ask_last_test(*sys.argv))
-        elif sys.argv[1]=="pingst":
+        elif sys.argv[1] == "pingst":
             for i in range(int(sys.argv[5])):
                 loop.run_until_complete(ping_test(*sys.argv))
         else:
-        #loop.run_until_complete(emit_test('00000000a801000000000000000098018e11951127029b0625029906270299062702380227023a0225023802270238022d023202270299062702990627029806270238022702380227023802270238022802370227023802270238022702980627023802240245021c02380227023802270238022702980627029c0623023802270298062702990627029b062502990627029906270220b7a1119d11270299062702990628029b06250238022702380227023802270238022702380227029906270299062702990627023802270238022a0234022702380227023802260238022702380226029a06260238022602380226023802260241021e02380227029b0624029906270238022702980627029b0625029906270299062702990629021db79f11a2112502990627029b0625029906270238022702380227023802270238022a02350227029906270299062702990628023702260238022702380227023802270238022702380226023b02240299062702380226023802270238022602380227023c0223029906270299062702380226029b062402990627029906270299062802980627020000'))
+            # loop.run_until_complete(emit_test('00000000a801000000000000000098018e11951127029b0625029906270299062702380227023a0225023802270238022d023202270299062702990627029806270238022702380227023802270238022802370227023802270238022702980627023802240245021c02380227023802270238022702980627029c0623023802270298062702990627029b062502990627029906270220b7a1119d11270299062702990628029b06250238022702380227023802270238022702380227029906270299062702990627023802270238022a0234022702380227023802260238022702380226029a06260238022602380226023802260241021e02380227029b0624029906270238022702980627029b0625029906270299062702990629021db79f11a2112502990627029b0625029906270238022702380227023802270238022a02350227029906270299062702990628023702260238022702380227023802270238022702380226023b02240299062702380226023802270238022602380227023c0223029906270299062702380226029b062402990627029906270299062802980627020000'))
             loop.run_until_complete(emit_test(*sys.argv))
-        #loop.run_until_complete(learn_test())
+            # loop.run_until_complete(learn_test())
     except BaseException as ex:
-        _LOGGER.error("Test error %s",str(ex))
-        traceback.print_exc()
-    except:
-        _LOGGER.error("Test error")
+        _LOGGER.error("Test error %s", str(ex))
         traceback.print_exc()
     finally:
         loop.close()
-    
